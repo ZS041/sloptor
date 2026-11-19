@@ -20,6 +20,7 @@ pub mod guard;
 pub mod guard_dedup;
 pub mod guard_diagnostics;
 pub mod guard_factory;
+pub mod guard_packed;
 pub mod guard_types;
 pub mod hashids;
 pub mod id;

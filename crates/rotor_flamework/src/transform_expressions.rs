@@ -186,11 +186,18 @@ pub(crate) fn transform_flamework_expressions_in_source_file_with_runtime(
 	if let Some(error) = visitor.failure {
 		return Err(error);
 	}
-	let transformed = transformed.as_source_file_p();
+	let mut transformed = transformed.as_source_file_p();
 	if !visitor.attribute_setter_required && visitor.imports.is_empty() {
 		return Ok(transformed);
 	}
-	let mut statements = macro_import_statements(&state.factory, &visitor.imports);
+
+	let mut imports = visitor.imports;
+	if let Some(local) = unique_guard_library_local(Some(source_file), &imports) {
+		rename_guard_library_imports(&mut imports, &local);
+		transformed = rename_synthesized_guard_library(&state.factory, transformed.as_node(), &local).as_source_file_p();
+	}
+
+	let mut statements = macro_import_statements(&state.factory, &imports);
 	if visitor.attribute_setter_required {
 		statements.push(new_attribute_setter_import(&state.factory));
 	}
@@ -288,6 +295,36 @@ fn flamework_macro_random_index(upper_bound: usize) -> Result<usize, Error> {
 			return Ok(usize::try_from(value % bound).unwrap_or(0));
 		}
 	}
+}
+
+/// The local name for the guard library import when the file already uses `t`. Upstream Flamework
+/// imports the library through a unique name, so a file with its own `t` (even `import type { t }`)
+/// gets `t_1` instead of a duplicate binding.
+pub(crate) fn unique_guard_library_local(source_file: Option<P<SourceFile>>, imports: &[MacroImport]) -> Option<String> {
+	let file = source_file?;
+	let imports_guard_library = imports.iter().any(|import| import.export == "t" && import.local == "t");
+	if !imports_guard_library || !file.has_identifier("t") {
+		return None;
+	}
+
+	(1..).map(|suffix| format!("t_{suffix}")).find(|name| !file.has_identifier(name))
+}
+
+/// Points the guard library imports at `local`.
+pub(crate) fn rename_guard_library_imports(imports: &mut [MacroImport], local: &str) {
+	for import in imports.iter_mut().filter(|import| import.export == "t" && import.local == "t") {
+		local.clone_into(&mut import.local);
+	}
+}
+
+/// Renames the synthesized `t` references the guard builder produced, leaving the file's own
+/// `t` identifiers untouched.
+pub(crate) fn rename_synthesized_guard_library(factory: &NodeFactory, node: P<Node>, local: &str) -> P<Node> {
+	if is_identifier(node) && node.text() == "t" && node.pos().is_synthetic() {
+		return factory.new_identifier(alloc(local));
+	}
+
+	map_children(factory, node, |child| Some(rename_synthesized_guard_library(factory, child, local)))
 }
 
 /// `macroImportStatements`: one named import per distinct macro import, in order.

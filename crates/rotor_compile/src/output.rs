@@ -216,8 +216,14 @@ fn build_project_in_scope(project_dir: &str, mut opts: ProjectOptions) -> Result
 		Some(previous) if previous.salt == current_manifest.salt => previous.outputs.clone(),
 		_ => BTreeMap::new(),
 	};
-	if let Err(error) = writer.use_hashes(
+	let output_dirs: Vec<String> = [path_translator.out_dir.clone(), path_translator.build_info_output_path.clone()]
+		.into_iter()
+		.filter(|path| !path.is_empty())
+		.map(|path| gopath::from_slash(&gopath::abs(&path).unwrap_or(path)).into_owned())
+		.collect();
+	if let Err(error) = writer.use_hashes_within(
 		&gopath::from_slash(&dir),
+		&output_dirs,
 		&previous_outputs,
 		std::mem::take(&mut current_manifest.outputs),
 	) {
@@ -697,8 +703,9 @@ fn write_compiled_outputs(
 			.zip(&wrote)
 			.map(|((rel_out, abs_out, source_map), wrote)| -> Job<'_> {
 				Box::new(move || {
-					// Defense in depth: refuse any output path escaping the project directory.
-					assert_local_output_path(rel_out)?;
+					// Defense in depth: refuse any output path escaping the writer's confinement (the
+					// project directory, widened to contain a configured `outDir`).
+					writer.assert_confined_output(rel_out, abs_out)?;
 					let text = outputs.get(rel_out).map_or(&[][..], Vec::as_slice);
 					let written = writer.write(abs_out, text)?;
 					wrote.store(written, Ordering::Relaxed);

@@ -466,11 +466,14 @@ impl Decoder {
 
 	fn optimizations(&mut self, data: &Data, out: &mut FlameworkOptimizations) -> Res<()> {
 		for entry in self.struct_entries(data, "config.FlameworkOptimizations")? {
-			if match_field(&entry.key, &["guardGenerationDedupLimit"]).is_none() {
+			let Some(index) = match_field(&entry.key, &["guardGenerationDedupLimit", "packedGuards"]) else {
 				continue;
-			}
+			};
 			self.enter(entry);
-			out.guard_generation_dedup_limit = Some(self.integer(&entry.data)?);
+			match index {
+				0 => out.guard_generation_dedup_limit = Some(self.integer(&entry.data)?),
+				_ => out.packed_guards = self.boolean(&entry.data)?,
+			}
 			self.leave();
 		}
 		Ok(())

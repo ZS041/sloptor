@@ -23,6 +23,8 @@ use crate::project::lock;
 pub struct OutputWriter {
 	pub(crate) case_sensitive: bool,
 	pub(crate) project_dir: String,
+	/// The directory writes are confined to: the project directory, widened to contain `outDir`.
+	confine_dir: String,
 	/// The canonical project directory, once [`OutputWriter::use_hashes`] confined the writer.
 	canonical_root: Option<String>,
 	pub(crate) previous: HashMap<String, String>,
@@ -54,6 +56,7 @@ impl OutputWriter {
 		Self {
 			case_sensitive: rotor_tsrs::vfs::osvfs::fs().use_case_sensitive_file_names(),
 			project_dir: String::new(),
+			confine_dir: String::new(),
 			canonical_root: None,
 			previous: HashMap::new(),
 			stamps: crate::output_stamps::OutputStamps::default(),
@@ -66,16 +69,36 @@ impl OutputWriter {
 
 	/// `useHashes`: confines the writer to `project_dir`, validates the previous build's hashes
 	/// against the files on disk, and records new hashes into `current`.
+	#[cfg(test)]
 	pub(crate) fn use_hashes(
 		&mut self,
 		project_dir: &str,
 		previous: &BTreeMap<String, String>,
 		current: BTreeMap<String, String>,
 	) -> Result<(), Error> {
+		self.use_hashes_within(project_dir, &[], previous, current)
+	}
+
+	/// [`OutputWriter::use_hashes`], with the confinement widened to the nearest directory that
+	/// contains the project and each of `output_dirs`. rbxtsc writes `outDir` wherever the
+	/// tsconfig points (for example `../../out/game` in a monorepo), so an `outDir` outside the
+	/// project directory is still a deliberate destination. Output keys and stamps stay
+	/// project-relative.
+	pub(crate) fn use_hashes_within(
+		&mut self,
+		project_dir: &str,
+		output_dirs: &[String],
+		previous: &BTreeMap<String, String>,
+		current: BTreeMap<String, String>,
+	) -> Result<(), Error> {
 		self.project_dir = gopath::clean(project_dir);
+		self.confine_dir = output_dirs
+			.iter()
+			.filter(|dir| !dir.is_empty())
+			.fold(self.project_dir.clone(), |root, dir| common_ancestor(&root, &gopath::clean(dir)));
 		self.current = Some(Mutex::new(current));
-		let canonical = fs::canonicalize(&self.project_dir)
-			.map_err(|error| Error::message(gostr::path_error("openat", &self.project_dir, &error)))?;
+		let canonical = fs::canonicalize(&self.confine_dir)
+			.map_err(|error| Error::message(gostr::path_error("openat", &self.confine_dir, &error)))?;
 		self.canonical_root = Some(canonical.to_string_lossy().into_owned());
 		if !previous.is_empty() {
 			self.stamps = crate::output_stamps::OutputStamps::load(&self.project_dir);
@@ -136,10 +159,14 @@ impl OutputWriter {
 		self.check_confined_parent(path).is_ok() && fs::read(path).is_ok_and(|existing| existing == contents)
 	}
 
-	/// `lstat`: refuses paths outside the project directory.
+	/// `lstat`: refuses paths outside the confinement.
 	pub(crate) fn lstat(&self, path: &str) -> Result<fs::Metadata, Error> {
-		let key = self.output_key(path);
-		if !gopath::is_local(&gopath::from_slash(&key)) {
+		let confined = if self.confine_dir.is_empty() {
+			gopath::is_local(&gopath::from_slash(&self.output_key(path)))
+		} else {
+			gopath::rel(&self.confine_dir, &gopath::clean(path)).is_ok_and(|relative| gopath::is_local(&relative))
+		};
+		if !confined {
 			return Err(Error::message(format!(
 				"compile: refusing to inspect output outside the project directory: {}",
 				gostr::quote(path)
@@ -214,6 +241,19 @@ impl OutputWriter {
 		}
 	}
 
+	/// `assertLocalOutputPath`, measured against the confinement: a project-relative `rel_out`
+	/// passes, and so does one whose absolute `abs_out` stays inside the widened confinement.
+	pub(crate) fn assert_confined_output(&self, rel_out: &str, abs_out: &str) -> Result<(), Error> {
+		let local = crate::output::assert_local_output_path(rel_out);
+		if local.is_ok() || self.confine_dir.is_empty() {
+			return local;
+		}
+
+		let confined =
+			gopath::rel(&self.confine_dir, &gopath::clean(abs_out)).is_ok_and(|relative| gopath::is_local(&relative));
+		if confined { Ok(()) } else { local }
+	}
+
 	/// `prepare`: creates the parent directories of `paths`.
 	pub(crate) fn prepare(&self, paths: &[String]) -> Result<(), Error> {
 		for path in paths {
@@ -266,9 +306,9 @@ impl OutputWriter {
 
 	/// `prepareParent`: creates the parent of `path` once per directory.
 	fn prepare_parent(&self, path: &str) -> Result<(), Error> {
-		if !self.project_dir.is_empty() {
+		if !self.confine_dir.is_empty() {
 			let local =
-				gopath::rel(&self.project_dir, &gopath::clean(path)).is_ok_and(|relative| gopath::is_local(&relative));
+				gopath::rel(&self.confine_dir, &gopath::clean(path)).is_ok_and(|relative| gopath::is_local(&relative));
 			if !local {
 				return Err(Error::message(format!(
 					"compile: refusing to prepare output outside the project directory: {}",
@@ -294,6 +334,23 @@ impl OutputWriter {
 		self.check_confined_parent(&probe)?;
 		lock(&self.prepared).insert(key);
 		Ok(())
+	}
+}
+
+/// The nearest directory containing both `base` and `target` (both clean absolute paths).
+fn common_ancestor(base: &str, target: &str) -> String {
+	let mut candidate = base.to_owned();
+	loop {
+		if gopath::rel(&candidate, target).is_ok_and(|relative| gopath::is_local(&relative)) {
+			return candidate;
+		}
+
+		let parent = gopath::dir(&candidate);
+		if parent == candidate {
+			return candidate;
+		}
+
+		candidate = parent;
 	}
 }
 

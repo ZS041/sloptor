@@ -122,6 +122,7 @@ fn task7_diagnostics_class_same_compiler_five_family_tree_matches_oracle() {
 		id_generation_mode: "full".to_owned(),
 		optimizations: rotor_config::config::FlameworkOptimizations {
 			guard_generation_dedup_limit: Some(2),
+			packed_guards: false,
 		},
 		..FlameworkConfig::default()
 	};

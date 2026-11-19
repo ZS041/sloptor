@@ -88,6 +88,9 @@ impl GuardGenerator<'_, '_> {
 		if type_value == self.state.ck().get_boolean_type() {
 			return Ok(guard_field(&factory, "t", "boolean"));
 		}
+		if let Some(packed) = self.packed_string_union(type_value) {
+			return Ok(packed);
+		}
 		let mut optional = false;
 		let mut guards = Vec::with_capacity(type_value.types().len());
 		let mut literals = Vec::new();
@@ -150,7 +153,8 @@ impl GuardGenerator<'_, '_> {
 			}
 		}
 		if !literals.is_empty() {
-			guards.push(guard_list_call(&factory, "literal", literals));
+			let packed = self.packed_literal_nodes(&literals);
+			guards.push(packed.unwrap_or_else(|| guard_list_call(&factory, "literal", literals)));
 		}
 		let has_guards = !guards.is_empty();
 		let union = match guards.len() {
@@ -190,11 +194,10 @@ impl GuardGenerator<'_, '_> {
 		let mut guards = Vec::with_capacity(2);
 		if !properties.is_empty() {
 			let property_guards = self.build_properties(type_value, true)?;
-			guards.push(guard_call(
-				&factory,
-				"interface",
-				vec![guard_object(&factory, property_guards)],
-			));
+			let packed = self.packed_interface(&property_guards);
+			guards.push(packed.unwrap_or_else(|| {
+				guard_call(&factory, "interface", vec![guard_object(&factory, property_guards)])
+			}));
 		}
 		if index_infos.len() > 1 {
 			return Err(self.fail(type_value, "types with multiple index signatures are unsupported"));

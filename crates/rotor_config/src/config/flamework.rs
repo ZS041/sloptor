@@ -72,6 +72,9 @@ pub struct FlameworkProfile {
 pub struct FlameworkOptimizations {
 	/// The maximum guard-generation deduplication work; `None` when unset.
 	pub guard_generation_dedup_limit: Option<i64>,
+	/// Emit large string-literal sets as packed `t.packedLiteralList`/`t.packedInterface` calls.
+	/// Requires an `@rbxts/t` runtime that provides those functions.
+	pub packed_guards: bool,
 }
 
 /// A structural problem [`Config::validate`] found.
@@ -174,6 +177,7 @@ const fn has_global_flamework_options(flamework: &FlameworkConfig) -> bool {
 		|| flamework.preload_ids
 		|| flamework.skip_unchanged_files
 		|| flamework.optimizations.guard_generation_dedup_limit.is_some()
+		|| flamework.optimizations.packed_guards
 }
 
 fn validate_flamework_profile(name: &str, profile: &FlameworkProfile) -> Vec<ConfigError> {

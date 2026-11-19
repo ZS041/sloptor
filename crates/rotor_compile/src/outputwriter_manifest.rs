@@ -118,11 +118,12 @@ pub(crate) struct OutputPresenceIndex {
 	regular: HashSet<String>,
 }
 
-/// `normalizeOutputPresenceKey`: cleaned, slash-separated, local, and lowercased when the file
-/// system is case-insensitive.
+/// `normalizeOutputPresenceKey`: cleaned, slash-separated, relative, and lowercased when the file
+/// system is case-insensitive. A key may climb out of the project (`../out/game/...`) when
+/// `outDir` lives beside it; the writer's confinement still bounds where those paths resolve.
 pub(crate) fn normalize_output_presence_key(output_path: &str, case_sensitive: bool) -> Option<String> {
 	let key = gopath::to_slash(&gopath::clean(&gopath::from_slash(output_path))).into_owned();
-	if !gopath::is_local(&key) {
+	if key.is_empty() || key.contains(':') || std::path::Path::new(&key).has_root() {
 		return None;
 	}
 	Some(if case_sensitive { key } else { key.to_lowercase() })

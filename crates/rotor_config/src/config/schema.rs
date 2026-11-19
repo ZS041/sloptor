@@ -148,6 +148,10 @@ pub const SCHEMA: &str = r#"{
 									"guardGenerationDedupLimit": {
 										"type": "integer",
 										"minimum": 0
+									},
+									"packedGuards": {
+										"type": "boolean",
+										"description": "Emit large string-literal sets as packed t.packedLiteralList/t.packedInterface calls. Requires an @rbxts/t runtime that provides them."
 									}
 								}
 							}
@@ -197,6 +201,10 @@ pub const SCHEMA: &str = r#"{
 							"type": "integer",
 							"minimum": 0,
 							"description": "Maximum guard-generation deduplication work."
+						},
+						"packedGuards": {
+							"type": "boolean",
+							"description": "Emit large string-literal sets as packed t.packedLiteralList/t.packedInterface calls. Requires an @rbxts/t runtime that provides them."
 						}
 					}
 				}

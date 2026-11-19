@@ -621,6 +621,7 @@ fn task7_differential_matches_real_upstream_final_luau_diagnostics_and_artifacts
 		id_generation_mode: mode.to_owned(),
 		optimizations: rotor_config::config::FlameworkOptimizations {
 			guard_generation_dedup_limit: limit,
+			packed_guards: false,
 		},
 		..FlameworkConfig::default()
 	};

@@ -37,6 +37,7 @@ fn flamework_incremental_salt_deterministic_across_input_order() {
 			id_generation_mode: "full".to_owned(),
 			optimizations: FlameworkOptimizations {
 				guard_generation_dedup_limit: Some(0),
+				packed_guards: false,
 			},
 			..FlameworkConfig::default()
 		},

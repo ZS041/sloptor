@@ -200,6 +200,9 @@ impl GuardGenerator<'_, '_> {
 			let value = self.state.ck().get_constant_value(*member)?;
 			values.push(guard_literal(&self.state.factory, Some(value)));
 		}
+		if let Some(packed) = self.packed_literal_nodes(&values) {
+			return Some(packed);
+		}
 		Some(guard_list_call(&self.state.factory, "literal", values))
 	}
 
@@ -231,7 +234,16 @@ impl GuardGenerator<'_, '_> {
 		let preferred = preferred.trim();
 		let preferred = if preferred.is_empty() { "dedup" } else { preferred };
 		let file_name = self.source_file_name();
-		self.state.next_generated_name(&file_name, preferred)
+		let source_file = get_source_file_of_node(self.source);
+
+		// TypeScript's `createUniqueName` also skips every identifier the file already uses, so a
+		// hoisted guard named after its alias cannot shadow an import of the same name.
+		loop {
+			let name = self.state.next_generated_name(&file_name, preferred);
+			if !source_file.is_some_and(|file| file.has_identifier(&name)) {
+				return name;
+			}
+		}
 	}
 
 	/// `fail`: a [`GuardGenerationError`] with the path of types being generated.

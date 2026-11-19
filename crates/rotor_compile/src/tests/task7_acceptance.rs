@@ -322,6 +322,7 @@ pub fn task7_configured_options(limit: i64) -> FlameworkConfig {
 		preload_ids: true,
 		optimizations: FlameworkOptimizations {
 			guard_generation_dedup_limit: Some(limit),
+			packed_guards: false,
 		},
 		..FlameworkConfig::default()
 	}

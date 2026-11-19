@@ -142,11 +142,24 @@ fn transform_flamework_class_worker(
 		class.heritage_clauses(),
 		factory.new_node_list(members),
 	);
+	let mut body = Vec::new();
+	body.extend(prerequisites);
+	body.push(updated_class);
+	body.extend(class_decorator_statements);
+	body.extend(member_decorator_statements);
+
+	if let Some(local) =
+		crate::transform_expressions::unique_guard_library_local(get_source_file_of_node(semantic_class), &imports)
+	{
+		crate::transform_expressions::rename_guard_library_imports(&mut imports, &local);
+		body = body
+			.into_iter()
+			.map(|statement| crate::transform_expressions::rename_synthesized_guard_library(&factory, statement, &local))
+			.collect();
+	}
+
 	let mut statements = crate::transform_expressions::macro_import_statements(&factory, &imports);
-	statements.extend(prerequisites);
-	statements.push(updated_class);
-	statements.extend(class_decorator_statements);
-	statements.extend(member_decorator_statements);
+	statements.extend(body);
 	Ok(factory.new_syntax_list(rotor_tsrs::tscore::alloc_vec(statements)))
 }
 

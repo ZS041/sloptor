@@ -201,6 +201,7 @@ fn validate_flamework_config() {
 			FlameworkConfig {
 				optimizations: FlameworkOptimizations {
 					guard_generation_dedup_limit: Some(-1),
+					packed_guards: false,
 				},
 				..FlameworkConfig::default()
 			},
@@ -211,6 +212,7 @@ fn validate_flamework_config() {
 			FlameworkConfig {
 				optimizations: FlameworkOptimizations {
 					guard_generation_dedup_limit: Some(0),
+					packed_guards: false,
 				},
 				..FlameworkConfig::default()
 			},
