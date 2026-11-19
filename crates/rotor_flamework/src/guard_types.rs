@@ -10,7 +10,7 @@ use crate::guard_factory::{GuardProperty, guard_call, guard_field, guard_list_ca
 use crate::transform_macro_types::alloc;
 
 /// `robloxGuardTypes`
-pub(crate) const ROBLOX_GUARD_TYPES: [&str; 35] = [
+pub(crate) const ROBLOX_GUARD_TYPES: [&str; 36] = [
 	"UDim",
 	"UDim2",
 	"BrickColor",
@@ -45,6 +45,9 @@ pub(crate) const ROBLOX_GUARD_TYPES: [&str; 35] = [
 	"FloatCurveKey",
 	"OverlapParams",
 	"thread",
+	// `t.DateTime` (a typeof check) instead of a structural interface over DateTime's members,
+	// which a real DateTime fails at runtime.
+	"DateTime",
 	"buffer",
 ];
 
